@@ -1,0 +1,69 @@
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from typing import List
+
+app = FastAPI(title="Crossfit Competition API")
+
+
+class Atleta(BaseModel):
+    id: int
+    nome: str
+    idade: int
+    categoria: str
+
+class Prova(BaseModel):
+    id: int
+    nome: str
+    descricao: str
+
+class Pontuacao(BaseModel):
+    atleta_id: int
+    prova_id: int
+    pontos: float
+
+
+atletas_db: List[Atleta] = []
+provas_db: List[Prova] = []
+pontuacoes_db: List[Pontuacao] = []
+
+
+@app.post("/atletas", response_model=Atleta)
+async def criar_atleta(atleta: Atleta):
+    if any(a.id == atleta.id for a in atletas_db):
+        raise HTTPException(status_code=400, detail="Atleta com esse ID já existe.")
+    atletas_db.append(atleta)
+    return atleta
+
+@app.get("/atletas", response_model=List[Atleta])
+async def listar_atletas():
+    return atletas_db
+
+
+@app.post("/provas", response_model=Prova)
+async def criar_prova(prova: Prova):
+    if any(p.id == prova.id for p in provas_db):
+        raise HTTPException(status_code=400, detail="Prova com esse ID já existe.")
+    provas_db.append(prova)
+    return prova
+
+@app.get("/provas", response_model=List[Prova])
+async def listar_provas():
+    return provas_db
+
+
+@app.post("/pontuacoes", response_model=Pontuacao)
+async def registrar_pontuacao(pontuacao: Pontuacao):
+    atleta_existe = any(a.id == pontuacao.atleta_id for a in atletas_db)
+    prova_existe = any(p.id == pontuacao.prova_id for p in provas_db)
+    if not atleta_existe or not prova_existe:
+        raise HTTPException(status_code=404, detail="Atleta ou prova não encontrados.")
+    pontuacoes_db.append(pontuacao)
+    return pontuacao
+
+@app.get("/ranking", response_model=List[dict])
+async def ranking():
+    ranking_map = {}
+    for pont in pontuacoes_db:
+        ranking_map[pont.atleta_id] = ranking_map.get(pont.atleta_id, 0) + pont.pontos
+    ranking_list = sorted(ranking_map.items(), key=lambda x: x[1], reverse=True)
+    return [{"atleta_id": atleta_id, "pontos": pontos} for atleta_id, pontos in ranking_list]
